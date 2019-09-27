@@ -1,0 +1,197 @@
+#include<iostream>
+#include<vector>
+#include <string>
+#include <iterator>
+#include <regex>
+#include<map>
+
+using namespace std;
+class CTag
+{
+public:
+	vector<CTag*> children;
+	map<string, string> attribute;
+
+	string tagName;
+
+	CTag(string tagName);
+	~CTag ();
+};
+
+CTag::CTag(string tagName)
+{
+	this->tagName = tagName;
+}
+
+CTag::~CTag(){/* DO NOTHING */}
+
+string get_tag_name(string inputStr)
+{
+	//this pos always have because it check in upper function.
+	smatch m;
+	regex re("<\\s*([a-zA-Z0-9]*)");
+	regex_search(inputStr, m, re);
+	return m.str(1);
+}
+
+void create_map(CTag *targetTag, string inputStr)
+{
+	regex r("([a-zA-Z0-9]+)\\s*=\\s*\"([a-zA-Z0-9\\s]+)\"");
+	smatch m;
+
+	while (regex_search(inputStr, m, r) == true)
+	{
+		string att = m.str(1);
+		string val = m.str(2);
+		//cout << "found: attribute: " << att << "value: " << val << endl;
+		targetTag->attribute.insert(pair<string, string>(att, val));
+		inputStr = m.suffix().str();
+	}
+}
+void create_xml_tree(vector<string> inputStr, CTag *output)
+{
+	vector<string>:: iterator ptr;
+	// Create a root to contains all of them
+	CTag* root = new CTag("root");
+	vector<CTag*> parentList;
+	parentList.push_back(root);
+
+	for(ptr = inputStr.begin(); ptr < inputStr.end(); ptr ++)
+	{
+		// begin tag 
+		// first condition: contain '<' 
+		// second condition not contain '</'
+		int firstCondition = ptr->find("<", 0);
+		int secondCondition = ptr->find("</", 0);
+
+		bool isBeginTag = (firstCondition != string::npos) && (secondCondition == string::npos);
+		// Eng tag:
+		// second condition: contain '</'
+		bool isEndTag = (secondCondition != string::npos);
+		if (isBeginTag)
+		{
+			//Create object
+			string tagName = get_tag_name(*ptr);
+
+			CTag *currentTag = new CTag(tagName);
+			create_map(currentTag, *ptr);
+			// Add to children of last one in parent list
+			parentList.at(parentList.size()-1)->children.push_back(currentTag);
+
+			// Add object to end of parent list
+			parentList.push_back(currentTag);
+		}
+		else if (isEndTag)
+		{
+			// remove the last parent
+			parentList.pop_back();
+		}
+		else
+		{
+			// Do nothing
+		}
+	}
+	*output = *root;
+}
+
+string get_attribute_by_path(CTag root, string inputPattern)
+{
+	int idx = inputPattern.find("~", 0);
+	string path			= inputPattern.substr(0, idx);
+	string attribute	= inputPattern.substr(idx + 1, inputPattern.length() - idx -1);
+
+	// separate path into list of tag name
+	vector<string> tagNameList;
+
+	int prevFound = 0;
+	int foundPos = path.find(".", 0);
+
+	while (foundPos != string::npos)
+	{
+		if (foundPos != 0)
+		{
+			tagNameList.push_back( path.substr(prevFound, foundPos-prevFound));
+			prevFound = foundPos+1;
+			foundPos = path.find(".", prevFound);
+		}
+	}
+	tagNameList.push_back(path.substr(prevFound, path.length() - prevFound));
+	
+	CTag *currentTag = nullptr;
+	vector<CTag*> searchTarget = root.children;
+	CTag *resultTag = nullptr;
+
+	for (int i = 0; i< tagNameList.size(); i++)
+	{
+		string currentTagName = tagNameList.at(i);
+		// find the tag same as tag name
+		for (int j = 0; j < searchTarget.size(); j++)
+		{
+			currentTag = searchTarget.at(j);
+			if (currentTag->tagName == currentTagName)
+			{
+				resultTag = currentTag;
+				break;
+			}
+		}
+		searchTarget = currentTag->children;
+	}
+	
+	if (resultTag == nullptr)
+		return "Not Found!";
+	else
+	{
+		if (currentTag->attribute.find(attribute) == currentTag->attribute.end())
+		{
+			return "Not Found!";
+		}
+		else
+		{
+			return currentTag->attribute[attribute];
+		}
+	}	
+}
+
+void do_task()
+{
+
+	int lineNum, queryNum;
+
+	cin >> lineNum >> queryNum;
+
+	string dummy;
+	getline(cin, dummy);
+
+	vector<string> xmlContent;
+	for (int i = 0; i < lineNum; i++)
+	{
+		string tmp;
+		getline(cin, tmp);
+		xmlContent.push_back(tmp);
+	}
+
+	vector<string> queries;
+	for (int i = 0; i < queryNum; i++)
+	{
+		string tmp;
+		getline(cin, tmp);
+		queries.push_back(tmp);
+	}
+
+	CTag output("");
+	create_xml_tree(xmlContent, &output);
+
+	for (int i = 0; i < queries.size(); i++)
+	{
+		string currentQuery = queries.at(i);
+		string result = get_attribute_by_path(output, currentQuery);
+		cout << result << endl;
+	}
+}
+
+int main()
+{
+	do_task();
+	system("PAUSE");
+	return 0;
+}
